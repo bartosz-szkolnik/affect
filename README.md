@@ -11,7 +11,10 @@ Hello everyone. This is my attempt at this super cool [article/tutorial](https:/
 
 
 Todo
-- [ ] finish the tutorial
+- [x] finish the tutorial
 - [ ] type it properly (I think right now is too messy)
+- [ ] check if the jsx can work with it
+- [ ] add useEffect hook
+- [ ] make the style property better
 - [ ] Have some fun with it
 
