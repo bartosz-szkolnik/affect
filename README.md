@@ -13,8 +13,8 @@ Hello everyone. This is my attempt at this super cool [article/tutorial](https:/
 Todo
 - [x] finish the tutorial
 - [ ] type it properly (I think right now is too messy)
-- [ ] check if the jsx can work with it
+- [x] check if the jsx can work with it (It can!!!)
 - [ ] add useEffect hook
-- [ ] make the style property better
-- [ ] Have some fun with it
-
+- [x] make the style property better 
+- [x] add the className property
+- [ ] have some fun with it

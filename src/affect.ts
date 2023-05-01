@@ -1,10 +1,21 @@
-import { assignProperty, isEvent, isGone, isNew, isProperty, removeEventListener, addEventListener } from './utils';
+import {
+  assignProperty,
+  isEvent,
+  isGone,
+  isNew,
+  isProperty,
+  removeEventListener,
+  addEventListener,
+  assignStyles,
+  assignClassName,
+} from './utils';
 
 export namespace Affect {
   export type FunctionComponent<T> = (props: Props<T>) => Affect.Element;
   export type HostType = keyof HTMLElementTagNameMap | keyof HTMLElementDeprecatedTagNameMap | 'TEXT_ELEMENT';
   export type Type = HostType | FunctionComponent<any>;
   export type EventHandler = (event: Event) => void;
+  export type StylesProp = { [key: string]: { [key: string]: string } };
 
   export type Children = Affect.Element[];
   export type Props<T = { [key: string]: string | EventHandler }> = T | { children: Children };
@@ -42,8 +53,8 @@ export namespace Affect {
     };
   }
 
-  export function createElement<T = Record<string, string | Affect.EventHandler>>(
-    type: Affect.Type,
+  export function createElement<T = Record<string, string | EventHandler>>(
+    type: Type,
     props?: T | null,
     ...children: (Affect.Element | string)[]
   ): Affect.Element {
@@ -57,7 +68,7 @@ export namespace Affect {
   }
 
   export function render(element: Affect.Element, container: Node) {
-    const type = element.type as Affect.HostType;
+    const type = element.type as HostType;
     const dom = element.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(type);
 
     Object.keys(element.props)
@@ -72,15 +83,15 @@ export namespace Affect {
     container.appendChild(dom);
   }
 
-  function createDom(fiber: Affect.Fiber) {
-    const type = fiber.type as Affect.HostType;
+  function createDom(fiber: Fiber) {
+    const type = fiber.type as HostType;
     const dom = fiber.type === 'TEXT_ELEMENT' ? document.createTextNode('') : document.createElement(type);
 
     updateDom(dom, {}, fiber.props);
     return dom;
   }
 
-  function updateDom(dom: Node, prevProps: Affect.Props, nextProps: Affect.Props) {
+  function updateDom(dom: Node, prevProps: Props, nextProps: Props) {
     // Remove old or changed event listeners
     Object.keys(prevProps)
       .filter(isEvent)
@@ -103,7 +114,16 @@ export namespace Affect {
       .filter(isProperty)
       .filter(isNew(prevProps, nextProps))
       .forEach(name => {
-        assignProperty(name, dom, nextProps as Record<string, string>);
+        const prev = prevProps as Record<string, string>;
+        const next = nextProps as Record<string, string>;
+
+        if (name === 'style') {
+          assignStyles(dom, next as unknown as StylesProp);
+        } else if (name === 'className') {
+          assignClassName(dom, prev, next);
+        } else {
+          assignProperty(name, dom, next);
+        }
       });
 
     // Add event listeners
@@ -123,7 +143,7 @@ export namespace Affect {
     wipRoot = null;
   }
 
-  function commitWork(fiber: Affect.Fiber | null) {
+  function commitWork(fiber: Fiber | null) {
     if (!fiber) {
       return;
     }
@@ -146,7 +166,7 @@ export namespace Affect {
     commitWork(fiber.sibling);
   }
 
-  function commitDeletion(fiber: Affect.Fiber, domParent: Node) {
+  function commitDeletion(fiber: Fiber, domParent: Node) {
     if (fiber.dom) {
       domParent.removeChild(fiber.dom);
     } else {
@@ -172,10 +192,10 @@ export namespace Affect {
     nextUnitOfWork = wipRoot;
   }
 
-  let nextUnitOfWork: Affect.Fiber | null = null;
-  let currentRoot: Affect.Fiber | null = null;
-  let wipRoot: Affect.Fiber | null = null;
-  let deletions: Affect.Fiber[] | null = null;
+  let nextUnitOfWork: Fiber | null = null;
+  let currentRoot: Fiber | null = null;
+  let wipRoot: Fiber | null = null;
+  let deletions: Fiber[] | null = null;
 
   function workLoop(deadline: IdleDeadline) {
     let shouldYield = false;
@@ -193,7 +213,7 @@ export namespace Affect {
 
   requestIdleCallback(workLoop);
 
-  function performUnitOfWork(fiber: Affect.Fiber): Affect.Fiber {
+  function performUnitOfWork(fiber: Fiber): Fiber {
     const isFunctionComponent = fiber.type instanceof Function;
     if (isFunctionComponent) {
       updateFunctionComponent(fiber);
@@ -213,25 +233,25 @@ export namespace Affect {
       nextFiber = nextFiber.parent!;
     }
 
-    return undefined as unknown as Affect.Fiber;
+    return undefined as unknown as Fiber;
   }
 
-  let wipFiber: Affect.Fiber | null = null;
+  let wipFiber: Fiber | null = null;
   let hookIndex: number | null = null;
 
-  function updateFunctionComponent(fiber: Affect.Fiber) {
+  function updateFunctionComponent(fiber: Fiber) {
     wipFiber = fiber;
     hookIndex = 0;
     wipFiber.hooks = [];
 
-    const type = fiber.type as Affect.FunctionComponent<any>;
+    const type = fiber.type as FunctionComponent<any>;
     const children = [type(fiber.props)];
     reconcileChildren(fiber, children);
   }
 
   export function useState<T>(initialValue: T) {
-    const oldHook = wipFiber && wipFiber.alternate && wipFiber.alternate.hooks && wipFiber.alternate.hooks[hookIndex!];
-    const hook: Affect.Hook = { state: oldHook ? oldHook.state : initialValue, queue: [] };
+    const oldHook = wipFiber?.alternate?.hooks?.[hookIndex!];
+    const hook: Hook = { state: oldHook ? oldHook.state : initialValue, queue: [] };
 
     const actions = oldHook ? oldHook.queue : [];
     actions.forEach(action => {
@@ -243,7 +263,7 @@ export namespace Affect {
       hook.state = action;
     });
 
-    const setState = (action: Affect.Action<T>) => {
+    const setState = (action: Action<T>) => {
       hook.queue.push(action);
       wipRoot = {
         dom: currentRoot?.dom!,
@@ -264,23 +284,23 @@ export namespace Affect {
     return [hook.state, setState] as const;
   }
 
-  function updateHostComponent(fiber: Affect.Fiber) {
+  function updateHostComponent(fiber: Fiber) {
     if (!fiber.dom) {
       fiber.dom = createDom(fiber);
     }
 
-    const elements = fiber.props.children as Affect.Children;
+    const elements = fiber.props.children as Children;
     reconcileChildren(fiber, elements);
   }
 
-  function reconcileChildren(wipFiber: Affect.Fiber, elements: Affect.Children) {
+  function reconcileChildren(wipFiber: Fiber, elements: Children) {
     let index = 0;
-    let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
-    let prevSibling: Affect.Fiber | null = null;
+    let oldFiber = wipFiber.alternate?.child;
+    let prevSibling: Fiber | null = null;
 
     while (index < elements.length || oldFiber != null) {
       const element = elements[index];
-      let newFiber: Affect.Fiber | null = null;
+      let newFiber: Fiber | null = null;
 
       const sameType = oldFiber && element && element.type == oldFiber.type;
       if (sameType && oldFiber && element) {

@@ -1,12 +1,3 @@
-// todo add babel so that is can be transpiled
-// /** @jsx Affect.createElement */
-// const element = (
-//   <div id="foo">
-//     <a>bar</a>
-//     <b />
-//   </div>
-// )
-
 import Affect, { useState } from './affect';
 
 const container = document.getElementById('root')!;
@@ -39,7 +30,7 @@ const rerender = (value: string) => {
       Affect.createElement(
         'button',
         {
-          style: 'margin-bottom: 20px',
+          style: { marginBottom: '20px' },
           id: 'btn',
           onClick: () => {
             console.log('Hello mom!');
