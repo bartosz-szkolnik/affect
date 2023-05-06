@@ -14,7 +14,7 @@ Todo
 - [x] finish the tutorial
 - [ ] type it properly (I think right now is too messy)
 - [x] check if the jsx can work with it (It can!!!)
-- [ ] add useEffect hook
+- [x] add useEffect hook
 - [x] make the style property better 
 - [x] add the className property
 - [ ] have some fun with it

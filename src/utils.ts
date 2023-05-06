@@ -30,8 +30,6 @@ export const assignProperty = (name: string, to: Node, from: Record<string, stri
 
 const reg = /[A-Z]/g;
 export function assignStyles(dom: Node, props: Affect.StylesProp) {
-  console.log(dom, props.style);
-
   // @ts-expect-error
   (dom as HTMLElement).style = Object.keys(props.style).reduce((acc, styleName) => {
     const key = styleName.replace(reg, v => '-' + v.toLowerCase());

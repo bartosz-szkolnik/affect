@@ -1,4 +1,4 @@
-import Affect, { useState } from './affect';
+import Affect, { useEffect, useState } from './affect';
 
 const container = document.getElementById('root')!;
 
@@ -14,6 +14,10 @@ function App(props: AppProps) {
 
 function Counter() {
   const [state, setState] = useState(1);
+
+  useEffect(() => {
+    console.log(state);
+  }, [state]);
 
   return Affect.createElement('h1', { onClick: () => setState(c => c + 1) }, `Count: ${state}`);
 }

@@ -38,10 +38,22 @@ export namespace Affect {
   };
 
   export type Action<T> = T | ((c: T) => T);
-  export type Hook<T = unknown> = {
+  export type StateHook<T = unknown> = {
+    tag: 'state';
     state: T;
     queue: Action<T>[];
   };
+
+  export type Deps = unknown[];
+  export type Effect = () => (() => void) | void;
+  export type EffectHook = {
+    tag: 'effect';
+    effect: Effect | null;
+    cancel: ReturnType<Effect> | false;
+    deps?: Deps;
+  };
+
+  export type Hook = StateHook | EffectHook;
 
   function createTextElement(text: string): Affect.Element {
     return {
@@ -62,7 +74,7 @@ export namespace Affect {
       type,
       props: {
         ...props,
-        children: children.map(child => (typeof child === 'object' ? child : createTextElement(child))),
+        children: children.flat().map(child => (typeof child === 'object' ? child : createTextElement(child))),
       },
     };
   }
@@ -143,6 +155,28 @@ export namespace Affect {
     wipRoot = null;
   }
 
+  function cancelEffects(fiber: Fiber) {
+    if (fiber.hooks) {
+      fiber.hooks
+        .filter(hook => hook.tag === 'effect' && hook.cancel)
+        .forEach(hook => {
+          const effectHook = hook as EffectHook;
+          effectHook.cancel && effectHook.cancel();
+        });
+    }
+  }
+
+  function runEffects(fiber: Fiber) {
+    if (fiber.hooks) {
+      fiber.hooks
+        .filter(hook => hook.tag === 'effect' && hook.effect)
+        .forEach(hook => {
+          const effectHook = hook as EffectHook;
+          effectHook.cancel = effectHook.effect!();
+        });
+    }
+  }
+
   function commitWork(fiber: Fiber | null) {
     if (!fiber) {
       return;
@@ -154,11 +188,19 @@ export namespace Affect {
     }
     const domParent = domParentFiber.dom;
 
-    if (fiber.effectTag === 'PLACEMENT' && fiber.dom != null) {
-      domParent.appendChild(fiber.dom);
-    } else if (fiber.effectTag === 'UPDATE' && fiber.dom != null) {
-      updateDom(fiber.dom, fiber.alternate?.props!, fiber.props);
+    if (fiber.effectTag === 'PLACEMENT') {
+      if (fiber.dom != null) {
+        domParent.appendChild(fiber.dom);
+      }
+      runEffects(fiber);
+    } else if (fiber.effectTag === 'UPDATE') {
+      cancelEffects(fiber);
+      if (fiber.dom != null) {
+        updateDom(fiber.dom, fiber.alternate?.props!, fiber.props);
+      }
+      runEffects(fiber);
     } else if (fiber.effectTag === 'DELETION') {
+      cancelEffects(fiber);
       commitDeletion(fiber, domParent);
     }
 
@@ -250,17 +292,16 @@ export namespace Affect {
   }
 
   export function useState<T>(initialValue: T) {
-    const oldHook = wipFiber?.alternate?.hooks?.[hookIndex!];
-    const hook: Hook = { state: oldHook ? oldHook.state : initialValue, queue: [] };
+    const oldHook = wipFiber?.alternate?.hooks?.[hookIndex!] as StateHook;
+    const hook: StateHook = { state: oldHook ? oldHook.state : initialValue, queue: [], tag: 'state' };
 
     const actions = oldHook ? oldHook.queue : [];
     actions.forEach(action => {
       if (typeof action === 'function') {
         hook.state = action(hook.state);
-        return;
+      } else {
+        hook.state = action;
       }
-
-      hook.state = action;
     });
 
     const setState = (action: Action<T>) => {
@@ -280,8 +321,32 @@ export namespace Affect {
     };
 
     wipFiber?.hooks.push(hook);
-    hookIndex && hookIndex++;
+    hookIndex!++;
     return [hook.state, setState] as const;
+  }
+
+  function hasDepsChanged(prevDeps?: Deps | undefined, nextDeps?: Deps) {
+    return (
+      !prevDeps ||
+      !nextDeps ||
+      prevDeps.length !== nextDeps.length ||
+      prevDeps.some((dep, index) => dep !== nextDeps[index])
+    );
+  }
+
+  export function useEffect(effect: Effect, deps?: Deps) {
+    const oldHook = wipFiber?.alternate?.hooks?.[hookIndex!] as EffectHook;
+    const hasChanged = hasDepsChanged(oldHook?.deps, deps);
+
+    const hook: EffectHook = {
+      tag: 'effect',
+      effect: hasChanged ? effect : null,
+      cancel: hasChanged && oldHook?.cancel,
+      deps,
+    };
+
+    wipFiber?.hooks.push(hook);
+    hookIndex!++;
   }
 
   function updateHostComponent(fiber: Fiber) {
@@ -355,9 +420,11 @@ export default {
   render: Affect.render,
   renderWithFibers: Affect.renderWithFibers,
   useState: Affect.useState,
+  useEffect: Affect.useEffect,
 };
 
 export const createElement = Affect.createElement;
 export const render = Affect.render;
 export const renderWithFibers = Affect.renderWithFibers;
 export const useState = Affect.useState;
+export const useEffect = Affect.useEffect;
